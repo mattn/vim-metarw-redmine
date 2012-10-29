@@ -51,6 +51,8 @@ function! metarw#redmine#write(fakepath, line1, line2, append_p)
     throw 'metarw:redmine#e1'
   elseif !_.issue_given_p
     let result = s:write_new(_, content)
+    if result[0] != 'error'
+    endif
   else
     let result = s:write_update(_, content)
   endif
@@ -104,12 +106,16 @@ function! s:read_content(_)
   let content = []
   for [k, v] in items(issue)
     if k != 'description'
-      call add(content, printf("%s: %s", k, string(v)))
+      if type(v) == 4 && has_key(v, 'id')
+        call add(content, printf("%s: %s", k, v.id))
+      else
+        call add(content, printf("%s: %s", k, string(v)))
+      endif
     endif
     unlet v
   endfor
   call add(content, '--')
-  let description = substitute(issue.description, "\r", "", "g")
+  let description = has_key(issue, 'description') ? substitute(issue.description, "\r", "", "g") : ''
   let content += split(description, "\n")
   call setline(1, content)
 
@@ -144,7 +150,7 @@ function! s:read_list(_)
       \    'label': project.identifier . '/',
       \    'fakepath': printf('%s:%s/',
       \                       a:_.scheme,
-      \                       project.name)
+      \                       project.id)
       \ })
     endfor
   endif
@@ -160,8 +166,8 @@ function! s:write_new(_, content)
   let data = {}
   let lines = split(a:content, '\n--\n', 2)
   if len(lines) < 2
-    let metadata = lines[0]
-    let body = ''
+    let metadata = ''
+    let body = a:content
   else
     let metadata = lines[0]
     let body = lines[1]
@@ -169,18 +175,24 @@ function! s:write_new(_, content)
   for line in split(metadata, "\n")
     let pos = stridx(line, ':')
     if pos > 0
-      let data[line[0:pos]] = eval(line[pos+1:])
+      let data[line[0:pos-1]] = eval(line[pos+1:])
     endif
   endfor
+  if !has_key(data, 'subject')
+    let data['subject'] = split(body, "\n", 1)[0]
+  endif
   let data['description'] = body
   let data['project_id'] = a:_.project
   let result = webapi#http#post(s:url('/issues.json'),
-  \ webapi#json#encode({"issues": data}), {
+  \ webapi#json#encode({"issue": data}), {
   \   "Content-Type": "application/json"
   \ })
-  if split(result.header[0])[1] != '200'
-    throw 'Request failed: ' . result.header[0]
+  if split(result.header[0])[1] != '201'
+    return ['error', result.header[0]]
   endif
+  let data = webapi#json#decode(result.content).issue
+  exe 'noau file' printf('redmine:/%s/%s', data.project.id, data.id)
+  setlocal nomodified
 
   return ['done', '']
 endfunction
@@ -189,8 +201,8 @@ function! s:write_update(_, content)
   let data = {}
   let lines = split(a:content, '\n--\n', 2)
   if len(lines) < 2
-    let metadata = lines[0]
-    let body = ''
+    let metadata = ''
+    let body = a:content
   else
     let metadata = lines[0]
     let body = lines[1]
@@ -198,21 +210,20 @@ function! s:write_update(_, content)
   for line in split(metadata, "\n")
     let pos = stridx(line, ':')
     if pos > 0
-      let data[line[0:pos]] = eval(line[pos+1:])
+      let data[line[0:pos-1]] = eval(line[pos+1:])
     endif
   endfor
   if !has_key(data, 'subject')
-    let data['subject'] = split(body, "\n")[0]
+    let data['subject'] = split(body, "\n", 1)[0]
   endif
   let data['description'] = body
   let data['project_id'] = a:_.project
-  let data['key'] = s:redmine_apikey
   let result = webapi#http#post(s:url('/issues/', a:_.issue, '.json'),
-  \ webapi#json#encode({"issues": data}), {
+  \ webapi#json#encode({"issue": data}), {
   \   "Content-Type": "application/json"
   \ }, 'PUT')
   if split(result.header[0])[1] != '200'
-    throw 'Request failed: ' . result.header[0]
+    return ['error', result.header[0]]
   endif
 
   return ['done', '']
@@ -223,7 +234,7 @@ function! s:get_projects(_)
   \   "Content-Type": "application/json"
   \ })
   if split(result.header[0])[1] != '200'
-    throw 'Request failed: ' . result.header[0]
+    return ['error', result.header[0]]
   endif
 
   let json = webapi#json#decode(result.content)
@@ -239,7 +250,7 @@ function! s:get_issues(_)
   \   "Content-Type": "application/json"
   \ })
   if split(result.header[0])[1] != '200'
-    throw 'Request failed: ' . result.header[0]
+    return ['error', result.header[0]]
   endif
 
   let json = webapi#json#decode(result.content)
@@ -255,7 +266,7 @@ function! s:get_issue(_)
   \   "Content-Type": "application/json"
   \ })
   if split(result.header[0])[1] != '200'
-    throw 'Request failed: ' . result.header[0]
+    return ['error', result.header[0]]
   endif
 
   let json = webapi#json#decode(result.content)
@@ -265,4 +276,3 @@ function! s:get_issue(_)
 
   return json.issue
 endfunction
-
