@@ -8,7 +8,7 @@ function! metarw#redmine#complete(arglead, cmdline, cursorpos)
   if !_.project_given_p
     for project in s:get_projects(_)
       call add(candidates,
-      \        printf('%s:%s',
+      \        printf('%s:/%s',
       \               _.scheme,
       \               project.identifier))
     endfor
@@ -17,13 +17,13 @@ function! metarw#redmine#complete(arglead, cmdline, cursorpos)
   else
     for issue in s:get_issues(_)
       call add(candidates,
-      \        printf('%s:%s/%s',
+      \        printf('%s:/%s/%s',
       \               _.scheme,
       \               _.project,
       \               issue.id)
       \ )
     endfor
-    let head_part = printf('%s:%s/', _.scheme, _.project)
+    let head_part = printf('%s:/%s/', _.scheme, _.project)
     let tail_part = _.issue
   endif
 
@@ -97,27 +97,31 @@ function! s:parse_incomplete_fakepath(incomplete_fakepath)
   return _
 endfunction
 
+function! s:format(issue)
+  let content = []
+  for [k, v] in items(a:issue)
+    if k != 'description'
+      if type(v) == 4 && has_key(v, 'id')
+        call add(content, printf("%s: %s", k, v.id))
+      else
+        call add(content, printf("%s: %s", k, iconv(webapi#json#encode(v), 'utf-8', &encoding)))
+      endif
+    endif
+    unlet v
+  endfor
+  call add(content, '--')
+  let description = has_key(a:issue, 'description') ? substitute(a:issue.description, "\r", "", "g") : ''
+  let content += split(description, "\n")
+  return content
+endfunction
+
 function! s:read_content(_)
   try
     let issue = s:get_issue(a:_)
   catch
     return ['error', v:exception]
   endtry
-  let content = []
-  for [k, v] in items(issue)
-    if k != 'description'
-      if type(v) == 4 && has_key(v, 'id')
-        call add(content, printf("%s: %s", k, v.id))
-      else
-        call add(content, printf("%s: %s", k, string(v)))
-      endif
-    endif
-    unlet v
-  endfor
-  call add(content, '--')
-  let description = has_key(issue, 'description') ? substitute(issue.description, "\r", "", "g") : ''
-  let content += split(description, "\n")
-  call setline(1, content)
+  call setline(1, s:format(issue))
 
   return ['done', '']
 endfunction
@@ -150,7 +154,7 @@ function! s:read_list(_)
       \    'label': project.identifier . '/',
       \    'fakepath': printf('%s:%s/',
       \                       a:_.scheme,
-      \                       project.id)
+      \                       project.identifier)
       \ })
     endfor
   endif
@@ -175,7 +179,7 @@ function! s:write_new(_, content)
   for line in split(metadata, "\n")
     let pos = stridx(line, ':')
     if pos > 0
-      let data[line[0:pos-1]] = eval(line[pos+1:])
+      let data[line[0:pos-1]] = webapi#json#decode(line[pos+1:])
     endif
   endfor
   if !has_key(data, 'subject')
@@ -192,6 +196,9 @@ function! s:write_new(_, content)
   endif
   let data = webapi#json#decode(result.content).issue
   exe 'noau file' printf('redmine:/%s/%s', data.project.id, data.id)
+  silent! %d _
+  call setline(1, s:format(data))
+
   setlocal nomodified
 
   return ['done', '']
@@ -210,7 +217,7 @@ function! s:write_update(_, content)
   for line in split(metadata, "\n")
     let pos = stridx(line, ':')
     if pos > 0
-      let data[line[0:pos-1]] = eval(line[pos+1:])
+      let data[line[0:pos-1]] = webapi#json#decode(line[pos+1:])
     endif
   endfor
   if !has_key(data, 'subject')
