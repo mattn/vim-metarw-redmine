@@ -12,7 +12,7 @@ function! metarw#redmine#complete(arglead, cmdline, cursorpos)
       \               _.scheme,
       \               project.identifier))
     endfor
-    let head_part = printf('%s:', _.scheme)
+    let head_part = printf('%s:/', _.scheme)
     let tail_part = _.project
   else
     for issue in s:get_issues(_)
@@ -137,7 +137,7 @@ function! s:read_list(_)
     for issue in issues
       call add(result, {
       \    'label': issue.subject,
-      \    'fakepath': printf('%s:%s/%s',
+      \    'fakepath': printf('%s:/%s/%s',
       \                       a:_.scheme,
       \                       a:_.project,
       \                       issue.id)
@@ -152,7 +152,7 @@ function! s:read_list(_)
     for project in projects
       call add(result, {
       \    'label': project.identifier . '/',
-      \    'fakepath': printf('%s:%s/',
+      \    'fakepath': printf('%s:/%s/',
       \                       a:_.scheme,
       \                       project.identifier)
       \ })
