@@ -229,8 +229,8 @@ function! s:write_update(_, content)
   \ webapi#json#encode({"issue": data}), {
   \   "Content-Type": "application/json"
   \ }, 'PUT')
-  if split(result.header[0])[1] != '200'
-    return ['error', result.header[0]]
+  if result.status !~ '^2'
+    return ['error', result.message]
   endif
 
   return ['done', '']
@@ -240,8 +240,8 @@ function! s:get_projects(_)
   let result = webapi#http#get(s:url('/projects.json'), '', {
   \   "Content-Type": "application/json"
   \ })
-  if split(result.header[0])[1] != '200'
-    return ['error', result.header[0]]
+  if result.status !~ '^2'
+    return ['error', result.message]
   endif
 
   let json = webapi#json#decode(result.content)
@@ -256,8 +256,8 @@ function! s:get_issues(_)
   let result = webapi#http#get(s:url('/issues.json'), '', {
   \   "Content-Type": "application/json"
   \ })
-  if split(result.header[0])[1] != '200'
-    return ['error', result.header[0]]
+  if result.status !~ '^2'
+    return ['error', result.message]
   endif
 
   let json = webapi#json#decode(result.content)
@@ -272,8 +272,8 @@ function! s:get_issue(_)
   let result = webapi#http#get(s:url('/issues/', a:_.issue, '.json'), '', {
   \   "Content-Type": "application/json"
   \ })
-  if split(result.header[0])[1] != '200'
-    return ['error', result.header[0]]
+  if result.status !~ '^2'
+    return ['error', result.message]
   endif
 
   let json = webapi#json#decode(result.content)
