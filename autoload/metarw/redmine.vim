@@ -163,7 +163,8 @@ function! s:read_list(_)
 endfunction
 
 function! s:url(...)
-  return join([s:redmine_server] + a:000 + ['?key=', s:redmine_apikey], '')
+  let server = substitute(s:redmine_server, '/\+$', '', '')
+  return join([server] + a:000 + ['?key=', s:redmine_apikey], '')
 endfunction
 
 function! s:write_new(_, content)
@@ -241,7 +242,7 @@ function! s:get_projects(_)
   \   "Content-Type": "application/json"
   \ })
   if result.status !~ '^2'
-    return ['error', result.message]
+    throw result.message
   endif
 
   let json = webapi#json#decode(result.content)
